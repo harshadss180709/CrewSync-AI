@@ -1,0 +1,11 @@
+import express from "express";
+import { getAllUsers, toggleUserStatus, getAllProjects, broadcastNotification, getPlatformStats } from "../controllers/adminController.js";
+import { protect, authorize } from "../middleware/auth.js";
+const router = express.Router();
+router.use(protect, authorize("admin"));
+router.get("/users", getAllUsers);
+router.put("/users/:id/toggle", toggleUserStatus);
+router.get("/projects", getAllProjects);
+router.post("/broadcast", broadcastNotification);
+router.get("/stats", getPlatformStats);
+export default router;

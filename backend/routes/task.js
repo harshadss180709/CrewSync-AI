@@ -1,0 +1,11 @@
+import express from "express";
+import { createTask, getProjectTasks, updateTask, deleteTask, addComment } from "../controllers/taskController.js";
+import { protect } from "../middleware/auth.js";
+import { validateTask, validateTaskUpdate } from "../validators/taskValidator.js";
+const router = express.Router();
+router.post("/", protect, validateTask, createTask);
+router.get("/project/:projectId", protect, getProjectTasks);
+router.put("/:id", protect, validateTaskUpdate, updateTask);
+router.delete("/:id", protect, deleteTask);
+router.post("/:id/comment", protect, addComment);
+export default router;

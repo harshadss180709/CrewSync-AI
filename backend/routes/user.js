@@ -1,0 +1,13 @@
+import express from "express";
+import { getFreelancers, getUserById, updateProfile, addPortfolioItem, removePortfolioItem, updateAvatar, getUserStats } from "../controllers/userController.js";
+import { protect } from "../middleware/auth.js";
+import { uploadAvatar } from "../config/cloudinary.js";
+const router = express.Router();
+router.get("/freelancers", protect, getFreelancers);
+router.get("/:id/stats", protect, getUserStats);
+router.get("/:id", protect, getUserById);
+router.put("/profile", protect, updateProfile);
+router.post("/portfolio", protect, addPortfolioItem);
+router.delete("/portfolio/:itemId", protect, removePortfolioItem);
+router.put("/avatar", protect, uploadAvatar.single("avatar"), updateAvatar);
+export default router;

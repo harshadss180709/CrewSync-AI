@@ -1,0 +1,23 @@
+import express from "express";
+import { createProject, getProjects, getProjectById, updateProject, inviteFreelancer, removeFreelancer, uploadProjectFile, getContributions, deleteProject, getProjectProgress } from "../controllers/projectController.js";
+import { addMilestone, getMilestones, updateMilestone, deleteMilestone } from "../controllers/milestoneController.js";
+import { protect, authorize } from "../middleware/auth.js";
+import { uploadProjectFile as uploadMiddleware } from "../config/cloudinary.js";
+import { validateProject, validateInvite } from "../validators/projectValidator.js";
+const router = express.Router();
+router.post("/",                        protect, authorize("client","admin"), validateProject, createProject);
+router.get("/",                         protect, getProjects);
+router.get("/:id",                      protect, getProjectById);
+router.put("/:id",                      protect, updateProject);
+router.delete("/:id",                   protect, deleteProject);
+router.post("/:id/invite",              protect, authorize("client","admin"), validateInvite, inviteFreelancer);
+router.delete("/:id/freelancer/:fid",   protect, authorize("client","admin"), removeFreelancer);
+router.post("/:id/files",               protect, uploadMiddleware.single("file"), uploadProjectFile);
+router.get("/:id/contributions",        protect, getContributions);
+router.get("/:id/progress",             protect, getProjectProgress);
+// Milestone routes (nested under project)
+router.get("/:id/milestones",                            protect, getMilestones);
+router.post("/:id/milestones",                           protect, authorize("client","admin"), addMilestone);
+router.put("/:id/milestones/:milestoneId",               protect, updateMilestone);
+router.delete("/:id/milestones/:milestoneId",            protect, authorize("client","admin"), deleteMilestone);
+export default router;

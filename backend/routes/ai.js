@@ -1,0 +1,11 @@
+import express from "express";
+import { generateBrief, allocateTeam, estimateProject, aiChat, discoverProjects, analyzeProgress } from "../controllers/aiController.js";
+import { protect } from "../middleware/auth.js";
+const router = express.Router();
+router.post("/brief",            protect, generateBrief);
+router.post("/allocate",         protect, allocateTeam);
+router.post("/estimate",         protect, estimateProject);
+router.post("/chat",             protect, aiChat);
+router.post("/discover-projects",protect, discoverProjects);
+router.post("/analyze-progress", protect, analyzeProgress);
+export default router;
