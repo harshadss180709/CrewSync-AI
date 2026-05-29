@@ -22,19 +22,13 @@ const URGENCY_COLOR = { high: "text-red-400", medium: "text-yellow-400", low: "t
 
 function DiscoverCard({ job, onApply, isApplying, hasApplied }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="card p-5 hover:border-brand-500/30 transition-all group"
-    >
+    <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+      className="card p-5 hover:border-brand-500/30 transition-all group">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="text-sm font-semibold text-white group-hover:text-brand-300 transition-colors">
-              {job.title}
-            </h3>
-            {job.verified && (
-              <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" title="Verified client" />
-            )}
+            <h3 className="text-sm font-semibold text-white group-hover:text-brand-300 transition-colors">{job.title}</h3>
+            {job.verified && <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" title="Verified client" />}
           </div>
           <p className="text-xs text-gray-500 line-clamp-2">{job.description}</p>
         </div>
@@ -44,48 +38,39 @@ function DiscoverCard({ job, onApply, isApplying, hasApplied }) {
       </div>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {job.requiredSkills?.slice(0, 4).map(s => (
-          <span key={s} className="text-[10px] bg-dark-700 border border-white/8 text-gray-400 px-2 py-0.5 rounded-md">
-            {s}
-          </span>
+        {job.requiredSkills?.slice(0,4).map(s => (
+          <span key={s} className="text-[10px] bg-dark-700 border border-white/8 text-gray-400 px-2 py-0.5 rounded-md">{s}</span>
         ))}
       </div>
 
       <div className="flex items-center justify-between text-xs text-gray-500 mb-3 flex-wrap gap-2">
         <span className="flex items-center gap-1">
-          <DollarSign size={11} />
+          <DollarSign size={11}/>
           {job.budgetMin && job.budgetMax
-            ? `$${job.budgetMin.toLocaleString()} – $${job.budgetMax.toLocaleString()}`
+            ? `$${job.budgetMin.toLocaleString()}–$${job.budgetMax.toLocaleString()}`
             : job.budget}
         </span>
-        <span className="flex items-center gap-1"><Clock size={11} /> {job.deadline}</span>
-        {job.location && <span className="flex items-center gap-1"><MapPin size={11} /> {job.location}</span>}
+        <span className="flex items-center gap-1"><Clock size={11}/> {job.deadline}</span>
+        {job.location && <span className="flex items-center gap-1"><MapPin size={11}/> {job.location}</span>}
         {job.proposals != null && <span>{job.proposals} proposals</span>}
       </div>
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           {job._fromDB
-            ? <span className="text-[10px] bg-dark-600 border border-white/10 text-gray-400 px-1.5 py-0.5 rounded flex-shrink-0">
-                CrewSync
-              </span>
-            : <><Globe size={11} className="text-gray-600 flex-shrink-0" />
-               <span className="text-[10px] text-gray-600 truncate">{job.source}</span></>
+            ? <span className="text-[10px] bg-dark-600 border border-white/10 text-gray-400 px-1.5 py-0.5 rounded flex-shrink-0">CrewSync</span>
+            : <><Globe size={11} className="text-gray-600 flex-shrink-0"/><span className="text-[10px] text-gray-600 truncate">{job.source}</span></>
           }
           <span className="text-[10px] text-gray-600 truncate">{job.postedTime}</span>
           {job.urgency && job.urgency !== "normal" && (
-            <span className={`text-[10px] font-semibold flex-shrink-0 ${URGENCY_COLOR[job.urgency]}`}>
-              ● {job.urgency.replace("_", " ")}
-            </span>
+            <span className={`text-[10px] font-semibold flex-shrink-0 ${URGENCY_COLOR[job.urgency]}`}>● {job.urgency.replace("_"," ")}</span>
           )}
         </div>
-
         <button
           onClick={() => onApply(job)}
           disabled={isApplying || hasApplied}
           className={`
-            flex-shrink-0 flex items-center gap-1.5
-            text-xs px-3 py-1.5 rounded-lg border
+            flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border
             transition-all duration-150 disabled:cursor-not-allowed
             ${hasApplied
               ? "bg-green-500/10 border-green-500/30 text-green-400"
@@ -93,11 +78,11 @@ function DiscoverCard({ job, onApply, isApplying, hasApplied }) {
           `}
         >
           {isApplying ? (
-            <><Loader2 size={11} className="animate-spin" /> Sending…</>
+            <><Loader2 size={11} className="animate-spin"/> Sending…</>
           ) : hasApplied ? (
-            <><CheckCircle2 size={11} /> Sent</>
+            <><CheckCircle2 size={11}/> Sent</>
           ) : (
-            <><Send size={11} /> Express Interest</>
+            <><Send size={11}/> Express Interest</>
           )}
         </button>
       </div>
@@ -122,8 +107,10 @@ export default function Projects() {
   const [filterType,   setFilterType]   = useState("");
 
   // Discover state
-  const [discovered,    setDiscovered]    = useState([]);
-  const [discovering,   setDiscovering]   = useState(false);
+  const [discovered,  setDiscovered]  = useState([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [applied,     setApplied]     = useState(new Set()); // jobIds already submitted
+  const [applying,    setApplying]    = useState(null);      // jobId currently in-flight
 
   const discoverProjects = async () => {
     setDiscovering(true);
@@ -143,34 +130,29 @@ export default function Projects() {
     finally { setDiscovering(false); }
   };
 
-  // Track which jobs the user already applied to (prevents double-clicks)
-  const [applied, setApplied] = useState(new Set());
-  const [applying, setApplying] = useState(null); // jobId currently submitting
-
   const handleApply = async (job) => {
     if (applied.has(job.id)) {
       toast("You already expressed interest in this project.", { icon: "ℹ️" });
       return;
     }
-
     setApplying(job.id);
     try {
-      // DB-backed projects have a real MongoDB ObjectId as their id
       if (job._fromDB) {
+        // Real DB project — call the API which persists + emits notification
         await api.post(`/projects/${job.id}/interest`);
-        setApplied(prev => new Set([...prev, job.id]));
+        setApplied((prev) => new Set([...prev, job.id]));
         toast.success(`Interest sent for "${job.title}" — check your notifications.`);
       } else {
-        // AI-generated listing — no real project in DB; just confirm to the user
-        setApplied(prev => new Set([...prev, job.id]));
-        toast.success(`Interest noted for "${job.title}".\nThis is an external listing from ${job.source} — apply directly via their platform.`, {
-          duration: 5000,
-        });
+        // AI-generated listing — no DB record, just confirm
+        setApplied((prev) => new Set([...prev, job.id]));
+        toast.success(
+          `Interest noted for "${job.title}".\nThis is an external listing from ${job.source || "an external source"} — apply via their platform.`,
+          { duration: 5000 }
+        );
       }
     } catch (err) {
-      if (err?.status === 409 || err?.success === false) {
-        // Already expressed interest (409 from backend)
-        setApplied(prev => new Set([...prev, job.id]));
+      if (err?.status === 409 || err?.message?.includes("already")) {
+        setApplied((prev) => new Set([...prev, job.id]));
         toast("You've already expressed interest in this project.", { icon: "ℹ️" });
       } else {
         toast.error(err?.message || "Failed to submit interest. Please try again.");

@@ -1,40 +1,38 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Bell, Search, Menu, Wifi, WifiOff } from "lucide-react";
 import { useAuth }   from "../../context/AuthContext.jsx";
 import { useSocket } from "../../context/SocketContext.jsx";
 import api from "../../services/api.js";
 
 export default function Topbar({ onMenuClick }) {
-  const { user }                   = useAuth();
+  const { user }                        = useAuth();
   const { isConnected, onNotification } = useSocket();
-  const navigate = useNavigate();
 
   const [unread,    setUnread]    = useState(0);
   const [search,    setSearch]    = useState("");
   const [searching, setSearching] = useState(false);
   const inputRef = useRef(null);
 
-  // ── Fetch initial unread count ────────────────────────────
+  // ── Initial fetch + 60s fallback poll ────────────────────
   useEffect(() => {
     const fetchUnread = async () => {
       try {
         const { data } = await api.get("/notifications?limit=1");
-        setUnread(data.unread || 0);
-      } catch {}
+        setUnread(data.unread ?? data.unreadCount ?? 0);
+      } catch { /* silent */ }
     };
     fetchUnread();
-    // Fallback poll every 60 s (catches anything the socket misses)
-    const interval = setInterval(fetchUnread, 60_000);
-    return () => clearInterval(interval);
+    const id = setInterval(fetchUnread, 60_000);
+    return () => clearInterval(id);
   }, []);
 
-  // ── Real-time: bump badge instantly when a new notification arrives ──
+  // ── Real-time: bump badge instantly on new notification ───
   useEffect(() => {
-    const cleanup = onNotification(() => {
-      setUnread(prev => prev + 1);
+    if (!onNotification) return;
+    return onNotification(() => {
+      setUnread((prev) => prev + 1);
     });
-    return cleanup;
   }, [onNotification]);
 
   return (
@@ -51,7 +49,7 @@ export default function Topbar({ onMenuClick }) {
           <input
             ref={inputRef}
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearching(true)}
             onBlur={() => { setSearching(false); setSearch(""); }}
             placeholder="Search projects…"
@@ -65,18 +63,20 @@ export default function Topbar({ onMenuClick }) {
       {/* ── Right ────────────────────────────────────── */}
       <div className="flex items-center gap-2">
 
-        {/* Socket status pill */}
+        {/* Live / Offline pill */}
         <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs
           ${isConnected
             ? "bg-green-500/10 text-green-400"
-            : "bg-red-500/10  text-red-400"}`}>
+            : "bg-red-500/10  text-red-400"}`}
+        >
           {isConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
           <span className="font-medium">{isConnected ? "Live" : "Offline"}</span>
         </div>
 
-        {/* Bell */}
+        {/* Notification bell */}
         <Link
           to="/notifications"
+          onClick={() => setUnread(0)}
           className="relative btn-ghost p-2 rounded-xl"
           aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ""}`}
         >

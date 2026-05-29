@@ -26,12 +26,12 @@ export default function Sidebar({ collapsed, onToggle, onClose }) {
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // ── Fetch unread count on mount ───────────────────────────
+  // ── Initial fetch + 60s fallback poll ──────────────────────
   useEffect(() => {
     const fetchUnread = async () => {
       try {
         const { data } = await api.get("/notifications?limit=1");
-        // backend sends 'unread' — was mistakenly read as 'unreadCount' before
+        // Backend sends 'unread'; also aliased as 'unreadCount' for compatibility
         setUnreadCount(data.unread ?? data.unreadCount ?? 0);
       } catch { /* silent */ }
     };
@@ -40,12 +40,12 @@ export default function Sidebar({ collapsed, onToggle, onClose }) {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Real-time: bump badge instantly on new notification ───
+  // ── Real-time: bump badge instantly ────────────────────────
   useEffect(() => {
-    const cleanup = onNotification(() => {
-      setUnreadCount(prev => prev + 1);
+    if (!onNotification) return;
+    return onNotification(() => {
+      setUnreadCount((prev) => prev + 1);
     });
-    return cleanup;
   }, [onNotification]);
 
   const handleLogout = () => { logout(); navigate("/login"); };

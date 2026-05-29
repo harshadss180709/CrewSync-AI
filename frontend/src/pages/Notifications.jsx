@@ -22,18 +22,17 @@ const TYPE_META = {
 };
 
 export default function Notifications() {
-  const { onNotification }             = useSocket();
+  const { onNotification }                = useSocket();
   const [notifications, setNotifications] = useState([]);
-  const [loading,  setLoading]         = useState(true);
-  const [error,    setError]           = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [error,   setError]               = useState(null);
 
-  // ── Fetch from API ─────────────────────────────────────
+  // ── Fetch from API ────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const { data } = await api.get("/notifications?limit=50");
-      // Guard: the key is 'notifications' in the response
       setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
     } catch (err) {
       setError(err?.message || "Failed to load notifications.");
@@ -44,44 +43,43 @@ export default function Notifications() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Real-time: prepend new notification instantly ───────
+  // ── Real-time: prepend new notification instantly ─────────
   useEffect(() => {
     if (!onNotification) return;
-    const cleanup = onNotification((notif) => {
-      setNotifications(prev => {
+    return onNotification((notif) => {
+      setNotifications((prev) => {
         // Deduplicate by _id
-        if (prev.some(n => n._id === notif._id)) return prev;
+        if (prev.some((n) => n._id === notif._id)) return prev;
         return [notif, ...prev];
       });
+      // Also show a toast so it's visible from any page
       toast(notif.title, {
-        icon:     TYPE_META[notif.type]?.icon || "🔔",
+        icon:     TYPE_META[notif.type]?.icon ?? "🔔",
         duration: 4500,
       });
     });
-    return cleanup;
   }, [onNotification]);
 
-  // ── Actions ─────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────
   const markRead = async (id) => {
-    // Optimistic update
-    setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+    setNotifications((p) => p.map((n) => n._id === id ? { ...n, isRead: true } : n));
     await api.put(`/notifications/${id}/read`).catch(() => {});
   };
 
   const markAllRead = async () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setNotifications((p) => p.map((n) => ({ ...n, isRead: true })));
     await api.put("/notifications/read-all").catch(() => {});
     toast.success("All notifications marked as read");
   };
 
   const deleteN = async (id) => {
-    setNotifications(prev => prev.filter(n => n._id !== id));
+    setNotifications((p) => p.filter((n) => n._id !== id));
     await api.delete(`/notifications/${id}`).catch(() => {});
   };
 
-  const unread = notifications.filter(n => !n.isRead).length;
+  const unread = notifications.filter((n) => !n.isRead).length;
 
-  // ── Render ───────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className="space-y-5 max-w-2xl">
 
@@ -108,23 +106,20 @@ export default function Notifications() {
           <button
             onClick={load}
             disabled={loading}
-            className="btn-ghost p-2 rounded-xl text-gray-500 hover:text-gray-300 disabled:opacity-40"
             title="Refresh"
+            className="btn-ghost p-2 rounded-xl text-gray-500 hover:text-gray-300 disabled:opacity-40"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
 
-      {/* Error state */}
+      {/* Error banner */}
       {error && !loading && (
-        <div className="card p-5 border border-red-500/20 bg-red-500/5 flex items-center gap-3">
-          <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-red-300">Failed to load notifications</p>
-            <p className="text-xs text-red-400/70 mt-0.5">{error}</p>
-          </div>
-          <button onClick={load} className="btn-ghost text-xs text-red-400 hover:text-red-300 flex-shrink-0">
+        <div className="card p-4 border border-red-500/20 bg-red-500/5 flex items-center gap-3">
+          <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+          <p className="text-sm text-red-300 flex-1">{error}</p>
+          <button onClick={load} className="text-xs text-red-400 hover:text-red-300 flex-shrink-0">
             Retry
           </button>
         </div>
@@ -149,7 +144,7 @@ export default function Notifications() {
           <Bell size={36} className="text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400 font-medium">No notifications yet</p>
           <p className="text-xs text-gray-600 mt-1 max-w-xs mx-auto">
-            Express interest in a project, get invited to a team, or receive a payment to see notifications here.
+            Express interest in a project, get invited to a team, or receive a payment to see activity here.
           </p>
         </motion.div>
       )}
@@ -188,7 +183,7 @@ export default function Notifications() {
                       {n.title}
                     </p>
                     {!n.isRead && (
-                      <span className="w-2 h-2 bg-brand-500 rounded-full flex-shrink-0 mt-1.5" />
+                      <span className="w-2 h-2 bg-brand-500 rounded-full flex-shrink-0 mt-1.5 animate-pulse" />
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
@@ -209,10 +204,10 @@ export default function Notifications() {
                   </div>
                 </div>
 
-                {/* Actions — visible on hover via `group` on the parent */}
+                {/* Actions — visible on hover (`group` on parent triggers these) */}
                 <div
                   className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                  onClick={e => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {n.link && (
                     <Link
