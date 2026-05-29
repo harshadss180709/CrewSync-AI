@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
+import ForgotPassword from "./pages/ForgotPassword";
+
 // Error boundary
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 
@@ -44,6 +46,7 @@ export default function App() {
             <Route path="/login"    element={<Login />} />
             <Route path="/register"              element={<Register />} />
             <Route path="/verify-email/:token"   element={<VerifyEmail />} />
+	    <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
 
             {/* Protected — Dashboard shell */}
