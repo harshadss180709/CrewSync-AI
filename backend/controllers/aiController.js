@@ -88,17 +88,30 @@ export const aiChat = async (req, res, next) => {
 export const discoverProjects = async (req, res, next) => {
   try {
     const { skills, preferredBudget, location } = req.body;
-    const userSkills = skills?.length ? skills : (req.user.skills || []);
+
+    const userSkills = skills?.length
+      ? skills
+      : (req.user?.skills || ["React", "Node.js"]);
+
     const projects = await aiService.discoverProjects({
-      skills:          userSkills,
-      role:            req.user.role,
+      skills: userSkills,
+      role: req.user?.role || "freelancer",
       preferredBudget: preferredBudget || 2000,
-      location:        location || "Remote",
+      location: location || "Remote",
     });
-    res.json({ success: true, projects });
+
+    res.json({
+      success: true,
+      projects,
+    });
   } catch (err) {
     console.error("AI Discover Error:", err.message);
-    res.status(500).json({ success: false, message: "AI service error.", detail: err.message });
+
+    res.status(500).json({
+      success: false,
+      message: "AI service error.",
+      detail: err.message,
+    });
   }
 };
 
