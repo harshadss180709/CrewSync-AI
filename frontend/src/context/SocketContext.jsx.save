@@ -17,7 +17,7 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const socket = io(import.meta.env.VITE_SOCKET_URL || "https://crewsync-ai.onrender.com", {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || ""https://crewsync-ai.onrender.com"", {
       auth: { token },
       transports: ["websocket", "polling"],
       reconnection: true,

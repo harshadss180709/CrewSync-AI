@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
       if (!token) { dispatch({ type: "SET_LOADING", payload: false }); return; }
       try {
         api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        const { data } = await api.get("/auth/me");
+        const { data } = await api.get("/api/auth/me");
         dispatch({ type: "LOGIN_SUCCESS", payload: { user: data.user, token } });
       } catch {
         localStorage.removeItem("mf_token");
@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     dispatch({ type: "SET_LOADING", payload: true });
-    const { data } = await api.post("/auth/login", { email, password });
+    const { data } = await api.post("/api/auth/login", { email, password });
     localStorage.setItem("mf_token", data.token);
     api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
     dispatch({ type: "LOGIN_SUCCESS", payload: data });
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (formData) => {
     dispatch({ type: "SET_LOADING", payload: true });
-    const { data } = await api.post("/auth/register", formData);
+    const { data } = await api.post("/api/auth/register", formData);
     localStorage.setItem("mf_token", data.token);
     api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
     dispatch({ type: "LOGIN_SUCCESS", payload: data });
