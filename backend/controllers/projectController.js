@@ -229,9 +229,20 @@ export const getProjectProgress = async (req, res, next) => {
       else if (timeProgress > taskProgress + 10)      timelineStatus = "slightly_behind";
     }
 
-    // 7-day team activity (simplified: tasks touched in last 7 days)
-    const sevenDaysAgo  = new Date(now - 7 * 24 * 60 * 60 * 1000);
-    const recentActivity= tasks.filter(t => new Date(t.updatedAt) > sevenDaysAgo).length;
+    // 7-day team activity — per-day counts for the ActivityHeatmap
+    // Returns [{date:"Mon",count:N}, ...] for the last 7 days (oldest→newest)
+    const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const recentActivity = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (6 - i));      // go back 6..0 days
+      const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(d); dayEnd.setHours(23, 59, 59, 999);
+      const count    = tasks.filter(t => {
+        const u = new Date(t.updatedAt);
+        return u >= dayStart && u <= dayEnd;
+      }).length;
+      return { date: DAY_NAMES[d.getDay()], count };
+    });
 
     const budgetUsedPct = project.totalPaid && project.budget
       ? Math.min(100, Math.round((project.totalPaid / project.budget) * 100))
