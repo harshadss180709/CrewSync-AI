@@ -26,7 +26,7 @@ export default function Settings() {
     if (pwForm.newPassword !== pwForm.confirmPassword) return toast.error("Passwords don't match.");
     setLoading(true);
     try {
-      await api.put("/auth/change-password", { currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword });
+      await api.put("/api/auth/change-password", { currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword });
       toast.success("Password changed successfully!");
       setPwForm({ currentPassword:"", newPassword:"", confirmPassword:"" });
     } catch (err) { toast.error(err?.message || "Failed to change password"); }
