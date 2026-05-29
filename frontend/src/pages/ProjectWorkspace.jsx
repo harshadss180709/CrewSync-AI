@@ -101,6 +101,11 @@ export default function ProjectWorkspace() {
       });
       setBrief(data.brief);
       setShowAIBrief(true);
+      if (data.source === "fallback") {
+        toast("Brief generated from project template — Gemini AI temporarily offline.", { icon: "📋" });
+      } else {
+        toast.success("AI brief generated ✨");
+      }
     } catch { toast.error("AI service unavailable"); }
     finally { setAiBriefLoading(false); }
   };

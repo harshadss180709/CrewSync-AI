@@ -67,7 +67,13 @@ export default function FreelancerDiscovery() {
         requiredSkills: proj?.requiredSkills || [],
       });
       setAiResults(data.recommendations || []);
-      if (!data.recommendations?.length) toast("No matches found for this project.");
+      if (!data.recommendations?.length) {
+        toast("No matches found for this project.");
+      } else if (data.source === "fallback") {
+        toast(`${data.recommendations.length} freelancers ranked by skill match — AI scoring offline.`, { icon: "📊" });
+      } else {
+        toast.success(`${data.recommendations.length} AI recommendations ready ✨`);
+      }
     } catch { toast.error("AI service error"); }
     finally { setAiLoading(false); }
   };

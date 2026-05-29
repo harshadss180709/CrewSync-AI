@@ -52,7 +52,11 @@ export default function AIAssistant() {
     setLoading(true);
     try {
       const { data } = await api.post("/ai/chat", { message: msg, projectId });
-      setMessages(prev => [...prev, { role: "assistant", text: data.response }]);
+      // Append subtle suffix when running on fallback
+      const text = data.source === "fallback"
+        ? `${data.response}\n\n_— Offline mode: Gemini AI is temporarily unavailable._`
+        : data.response;
+      setMessages(prev => [...prev, { role: "assistant", text }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", text: "Sorry, I'm having trouble connecting right now. Please try again in a moment." }]);
     } finally {

@@ -108,7 +108,11 @@ export default function ProgressTracker({ project }) {
     try {
       const { data } = await api.post("/ai/analyze-progress", { projectId: project._id });
       setAiAnalysis(data.analysis);
-      toast.success("AI analysis complete ✨");
+      if (data.source === "fallback") {
+        toast("Analysis computed from project data — AI insights temporarily unavailable.", { icon: "📊" });
+      } else {
+        toast.success("AI analysis complete ✨");
+      }
     } catch { toast.error("AI analysis unavailable"); }
     finally { setAiLoading(false); }
   };

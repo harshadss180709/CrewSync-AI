@@ -52,8 +52,11 @@ function DiscoverCard({ job, onApply }) {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Globe size={11} className="text-gray-600" />
-          <span className="text-[10px] text-gray-600">{job.source} · {job.postedTime}</span>
+          {job._fromDB
+            ? <span className="text-[10px] bg-dark-600 border border-white/10 text-gray-400 px-1.5 py-0.5 rounded">CrewSync DB</span>
+            : <><Globe size={11} className="text-gray-600" /><span className="text-[10px] text-gray-600">{job.source}</span></>
+          }
+          <span className="text-[10px] text-gray-600">{job.postedTime}</span>
           {job.urgency && (
             <span className={`text-[10px] font-semibold ${URGENCY_COLOR[job.urgency]}`}>● {job.urgency}</span>
           )}
@@ -96,7 +99,11 @@ export default function Projects() {
         preferredBudget: null,
       });
       setDiscovered(data.projects || []);
-      toast.success(`Found ${(data.projects||[]).length} matching projects`);
+      if (data.source === "fallback") {
+        toast(`Found ${(data.projects||[]).length} real open projects — AI curation temporarily offline.`, { icon: "🗄️" });
+      } else {
+        toast.success(`Found ${(data.projects||[]).length} AI-curated projects`);
+      }
     } catch { toast.error("Discovery unavailable"); }
     finally { setDiscovering(false); }
   };
@@ -133,7 +140,11 @@ export default function Projects() {
         budget:   e.estimatedBudgetMin || p.budget,
         timeline: `${e.estimatedDays} days`,
       }));
-      toast.success("AI estimated budget & timeline ✨");
+      if (data.source === "fallback") {
+        toast("Estimate based on project type rules — AI unavailable right now.", { icon: "📐" });
+      } else {
+        toast.success("AI estimated budget & timeline ✨");
+      }
     } catch { toast.error("AI unavailable"); }
     finally { setAiLoading(false); }
   };
