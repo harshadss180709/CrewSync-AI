@@ -4,7 +4,7 @@ dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const getModel = () => genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const getModel = () => genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
 // ── Timeout wrapper: reject if Gemini takes > 25 s ───────
 const withTimeout = (promise, ms = 25000) =>
