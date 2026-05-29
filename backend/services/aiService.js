@@ -6,6 +6,24 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const getModel = () => genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+// ── Timeout wrapper: reject if Gemini takes > 25 s ───────
+const withTimeout = (promise, ms = 25000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("AI request timed out. Please try again.")), ms)
+    ),
+  ]);
+
+// ── Safe JSON parse: strips markdown fences if Gemini adds them ──
+const safeParseJSON = (text) => {
+  const cleaned = text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  // Find first [ or { to handle any leading text
+  const start = cleaned.search(/[\[{]/);
+  if (start === -1) throw new Error("AI returned non-JSON response.");
+  return JSON.parse(cleaned.slice(start));
+};
+
 // ── Generate Creative Brief ───────────────────────────────
 export const generateCreativeBrief = async ({ projectIdea, projectType, budget, timeline }) => {
   const model = getModel();
@@ -32,9 +50,9 @@ Generate a comprehensive creative brief in JSON format with these exact keys:
 }
 Respond ONLY with valid JSON.`;
 
-  const result   = await model.generateContent(prompt);
-  const text     = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const result   = await withTimeout(model.generateContent(prompt));
+  const text     = result.response.text();
+  return safeParseJSON(text);
 };
 
 // ── AI Freelancer Allocation ──────────────────────────────
@@ -78,9 +96,9 @@ Analyse each freelancer and return a JSON array of the TOP 5 recommendations:
 Consider skills match, rating, reliability, rate vs budget, and availability.
 Respond ONLY with valid JSON array.`;
 
-  const result = await model.generateContent(prompt);
-  const text   = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const result = await withTimeout(model.generateContent(prompt));
+  const text   = result.response.text();
+  return safeParseJSON(text);
 };
 
 // ── Estimate Project Timeline & Budget ───────────────────
@@ -104,9 +122,9 @@ Respond in JSON:
 }
 Respond ONLY with valid JSON.`;
 
-  const result = await model.generateContent(prompt);
-  const text   = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const result = await withTimeout(model.generateContent(prompt));
+  const text   = result.response.text();
+  return safeParseJSON(text);
 };
 
 // ── Smart Chat Assistant ──────────────────────────────────
@@ -120,7 +138,7 @@ User message: "${message}"
 
 Provide a helpful, concise, professional response (max 150 words). Be specific and actionable.`;
 
-  const result = await model.generateContent(prompt);
+  const result = await withTimeout(model.generateContent(prompt));
   return result.response.text().trim();
 };
 
@@ -159,9 +177,9 @@ Return a JSON array of exactly 12 projects:
 Make titles specific and realistic (not generic). Vary the sources and categories.
 Respond ONLY with valid JSON array.`;
 
-  const result = await model.generateContent(prompt);
-  const text   = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const result = await withTimeout(model.generateContent(prompt));
+  const text   = result.response.text();
+  return safeParseJSON(text);
 };
 
 // ── Analyse Project Progress ──────────────────────────────
@@ -210,7 +228,7 @@ Analyse project health and respond in JSON:
 }
 Be specific and data-driven. Respond ONLY with valid JSON.`;
 
-  const result = await model.generateContent(prompt);
-  const text   = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const result = await withTimeout(model.generateContent(prompt));
+  const text   = result.response.text();
+  return safeParseJSON(text);
 };

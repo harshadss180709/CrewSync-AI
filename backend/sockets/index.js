@@ -92,9 +92,15 @@ export const initSockets = (io) => {
     });
 
     // ── Disconnect ───────────────────────────────────────
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       console.log(`🔌 Disconnected: ${socket.user?.name}`);
-      io.emit("user:offline", { userId: socket.user._id });
+      // Broadcast offline only to rooms this user was in (not global broadcast)
+      const rooms = [...socket.rooms].filter(r => r.startsWith("project:"));
+      rooms.forEach(room => {
+        socket.to(room).emit("user:offline", { userId: socket.user._id });
+      });
+      // Also notify the user's personal room subscribers
+      socket.to(`user:${socket.user._id}`).emit("user:offline", { userId: socket.user._id });
     });
   });
 };

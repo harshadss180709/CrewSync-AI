@@ -30,23 +30,37 @@ export default function Dashboard() {
       finally { setLoading(false); }
     };
     load();
-    fetchInsights();
+    fetchInsights(false);
   }, []);
 
-  const fetchInsights = async () => {
+  const INSIGHT_CACHE_KEY = "crewsync_ai_insights";
+  const INSIGHT_TTL_MS    = 5 * 60 * 1000; // 5 minutes
+
+  const fetchInsights = async (force = false) => {
+    // Return cached value if fresh enough
+    if (!force) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(INSIGHT_CACHE_KEY) || "null");
+        if (cached && Date.now() - cached.ts < INSIGHT_TTL_MS && cached.data?.length) {
+          setAiInsights(cached.data);
+          return;
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
     setInsightLoad(true);
     try {
       const { data } = await api.post("/ai/chat", {
         message: "Give me exactly 3 brief, actionable insights about my projects and workflow. Each insight should be 1 sentence. Reply as JSON array of strings: [\"insight1\",\"insight2\",\"insight3\"]"
       });
-      try {
-        const text = data.response.replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) setAiInsights(parsed.slice(0, 3));
-      } catch {
-        setAiInsights(data.response ? [data.response] : []);
+      const text   = (data.response || "").replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(text.slice(text.search(/\[/)));
+      if (Array.isArray(parsed) && parsed.length) {
+        const insights = parsed.slice(0, 3);
+        setAiInsights(insights);
+        sessionStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: insights }));
       }
-    } catch { /* silent */ }
+    } catch { /* silent — AI is non-critical */ }
     finally { setInsightLoad(false); }
   };
 
@@ -156,7 +170,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-white">AI Insights</h2>
             <span className="text-[10px] bg-brand-600/20 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-full font-semibold">Gemini</span>
           </div>
-          <button onClick={fetchInsights} disabled={insightLoad}
+          <button onClick={() => fetchInsights(true)} disabled={insightLoad}
             className="text-xs text-gray-500 hover:text-brand-400 transition-colors flex items-center gap-1 disabled:opacity-50">
             {insightLoad ? <Loader2 size={11} className="animate-spin" /> : "↻"} Refresh
           </button>

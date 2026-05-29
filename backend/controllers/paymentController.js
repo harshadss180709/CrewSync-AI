@@ -69,6 +69,7 @@ export const getPayments = async (req, res, next) => {
     const query = {};
     if (req.user.role === "client")     query.payer = req.user._id;
     if (req.user.role === "freelancer") query["splits.freelancer"] = req.user._id;
+    // admin sees all payments — no filter applied
     if (status) query.status = status;
 
     const total    = await Payment.countDocuments(query);
@@ -252,17 +253,11 @@ export const createRazorpayOrder = async (req, res, next) => {
     if (project.client.toString() !== req.user._id.toString() && req.user.role !== "admin")
       return res.status(403).json({ success: false, message: "Only the client can fund this project." });
 
-    // If Razorpay keys not configured, return a mock order for demo
+    // Razorpay keys not configured — block payment
     if (!razorpay) {
-      const mockOrderId = `order_demo_${crypto.randomBytes(6).toString("hex")}`;
-      return res.json({
-        success:  true,
-        orderId:  mockOrderId,
-        amount:   amount * 100,   // paise
-        currency: "INR",
-        keyId:    "rzp_test_demo",
-        projectTitle: project.title,
-        demo:     true,
+      return res.status(503).json({
+        success: false,
+        message: "Payment gateway not configured. Please contact support.",
       });
     }
 
@@ -286,25 +281,50 @@ export const createRazorpayOrder = async (req, res, next) => {
 };
 
 // ── @POST /api/payments/razorpay/verify ──────────────────
-// Called after Razorpay checkout succeeds — verifies signature & creates escrow record
+// Called after Razorpay checkout succeeds — verifies HMAC signature & creates escrow record
 export const verifyRazorpayPayment = async (req, res, next) => {
   try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, projectId, amount, demo } = req.body;
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, projectId } = req.body;
 
-    // Skip signature check for demo mode
-    if (!demo) {
-      const expectedSig = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-        .digest("hex");
+    // ── ALWAYS verify HMAC — never accept demo flag from client ──
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({ success: false, message: "Missing payment verification fields." });
+    }
 
-      if (expectedSig !== razorpaySignature)
-        return res.status(400).json({ success: false, message: "Payment verification failed. Invalid signature." });
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(503).json({ success: false, message: "Payment gateway not configured." });
+    }
+
+    const expectedSig = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest("hex");
+
+    if (expectedSig !== razorpaySignature) {
+      return res.status(400).json({ success: false, message: "Payment verification failed. Invalid signature." });
+    }
+
+    // ── Fetch actual amount from Razorpay — never trust client-supplied amount ──
+    let verifiedAmountINR;
+    try {
+      const rzpPayment = await razorpay.payments.fetch(razorpayPaymentId);
+      if (rzpPayment.status !== "captured" && rzpPayment.status !== "authorized") {
+        return res.status(400).json({ success: false, message: `Payment not captured. Status: ${rzpPayment.status}` });
+      }
+      verifiedAmountINR = rzpPayment.amount / 100; // paise → rupees
+    } catch {
+      return res.status(400).json({ success: false, message: "Could not verify payment with Razorpay." });
     }
 
     const project = await Project.findById(projectId).populate("freelancers");
     if (!project)
       return res.status(404).json({ success: false, message: "Project not found." });
+
+    // ── Idempotency — prevent double-recording the same Razorpay payment ──
+    const existing = await Payment.findOne({ transactionId: `RZP-${razorpayPaymentId}` });
+    if (existing) {
+      return res.json({ success: true, message: "Payment already recorded.", payment: existing, txRef: existing.transactionId });
+    }
 
     // Compute contribution splits
     const contributions = await Contribution.find({ project: projectId });
@@ -313,26 +333,25 @@ export const verifyRazorpayPayment = async (req, res, next) => {
       freelancer:        c.freelancer,
       contributionBased: true,
       percentage:        total > 0 ? parseFloat(((c.contributionScore / total) * 100).toFixed(2)) : 0,
-      amount:            total > 0 ? parseFloat(((c.contributionScore / total) * amount).toFixed(2)) : 0,
+      amount:            total > 0 ? parseFloat(((c.contributionScore / total) * verifiedAmountINR).toFixed(2)) : 0,
     }));
 
-    const txRef = demo
-      ? `RZP-DEMO-${crypto.randomBytes(4).toString("hex").toUpperCase()}`
-      : `RZP-${razorpayPaymentId}`;
+    const txRef = `RZP-${razorpayPaymentId}`;
 
     const payment = await Payment.create({
       project:       projectId,
       payer:         req.user._id,
-      amount,
+      amount:        verifiedAmountINR,
+      currency:      "INR",
       type:          "milestone",
       status:        "in_escrow",
       paymentMethod: "razorpay",
       transactionId: txRef,
       splits,
-      notes: `Razorpay · Order: ${razorpayOrderId} · Payment: ${razorpayPaymentId || "demo"}`,
+      notes: `Razorpay · Order: ${razorpayOrderId} · Payment: ${razorpayPaymentId}`,
     });
 
-    await Project.findByIdAndUpdate(projectId, { $inc: { escrowBalance: amount } });
+    await Project.findByIdAndUpdate(projectId, { $inc: { escrowBalance: verifiedAmountINR } });
 
     // Notify freelancers
     for (const fId of project.freelancers) {
@@ -341,7 +360,7 @@ export const verifyRazorpayPayment = async (req, res, next) => {
         sender:    req.user._id,
         type:      "payment_received",
         title:     "Project Funded via Razorpay",
-        message:   `₹${amount.toLocaleString()} has been placed in escrow for "${project.title}".`,
+        message:   `₹${verifiedAmountINR.toLocaleString()} has been placed in escrow for "${project.title}".`,
         link:      `/payments`,
         priority:  "high",
       });

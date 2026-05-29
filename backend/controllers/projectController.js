@@ -22,10 +22,13 @@ export const getProjects = async (req, res, next) => {
 
     if (status) query.status = status;
     if (type)   query.projectType = type;
-    if (search) query.$or = [
-      { title: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
-    ];
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 100);
+      query.$or = [
+        { title:       { $regex: escaped, $options: "i" } },
+        { description: { $regex: escaped, $options: "i" } },
+      ];
+    }
 
     const total    = await Project.countDocuments(query);
     const projects = await Project.find(query)

@@ -11,7 +11,8 @@
       "Bash(cat \"/Users/harshadsathishkumarsheetal/.npm/_logs/2026-05-28T06_15_10_516Z-eresolve-report.txt\" 2>/dev/null | head -40)",
       "Bash(kill 2781)",
       "mcp__Claude_in_Chrome__read_console_messages",
-      "mcp__Claude_in_Chrome__get_page_text"
+      "mcp__Claude_in_Chrome__get_page_text",
+      "Bash(node -e \"const r=require\\('./node_modules/tailwindcss/package.json'\\); console.log\\(r.version\\)\")"
     ]
   }
 }

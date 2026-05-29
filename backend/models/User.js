@@ -50,10 +50,11 @@ const userSchema = new mongoose.Schema(
     },
 
     // Auth
-    isVerified:          { type: Boolean, default: false },
-    verificationToken:   { type: String },
-    resetPasswordToken:  { type: String },
-    resetPasswordExpire: { type: Date },
+    isVerified:              { type: Boolean, default: false },
+    verificationToken:       { type: String },
+    verificationTokenExpire: { type: Date },
+    resetPasswordToken:      { type: String },
+    resetPasswordExpire:     { type: Date },
     lastActive:          { type: Date, default: Date.now },
     isActive:            { type: Boolean, default: true },
 
@@ -69,9 +70,11 @@ const userSchema = new mongoose.Schema(
 );
 
 // ── Indexes ───────────────────────────────────────────────
-userSchema.index({ email: 1 });
+// Note: email is already indexed via unique:true — do not add a duplicate
 userSchema.index({ role: 1 });
 userSchema.index({ skills: 1 });
+userSchema.index({ verificationToken: 1 }, { sparse: true });
+userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 // ── Hash password before save ─────────────────────────────
 userSchema.pre("save", async function (next) {

@@ -16,7 +16,8 @@ export const register = async (req, res, next) => {
       email,
       password,
       role: role || "freelancer",
-      verificationToken: crypto.randomBytes(32).toString("hex"),
+      verificationToken:       crypto.randomBytes(32).toString("hex"),
+      verificationTokenExpire: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
     });
 
     const token = generateToken(user._id);
@@ -139,13 +140,36 @@ export const resetPassword = async (req, res, next) => {
 // ── @GET /api/auth/verify/:token ─────────────────────────
 export const verifyEmail = async (req, res, next) => {
   try {
-    const user = await User.findOne({ verificationToken: req.params.token });
-    if (!user) return res.status(400).json({ success: false, message: "Invalid verification token." });
+    const user = await User.findOne({
+      verificationToken:       req.params.token,
+      verificationTokenExpire: { $gt: Date.now() },
+    });
+    if (!user) return res.status(400).json({ success: false, message: "Verification link is invalid or has expired. Request a new one." });
 
-    user.isVerified = true;
-    user.verificationToken = undefined;
+    user.isVerified              = true;
+    user.verificationToken       = undefined;
+    user.verificationTokenExpire = undefined;
     await user.save({ validateBeforeSave: false });
 
-    res.json({ success: true, message: "Email verified successfully." });
+    res.json({ success: true, message: "Email verified successfully. You can now log in." });
+  } catch (err) { next(err); }
+};
+
+// ── @POST /api/auth/resend-verification ──────────────────
+export const resendVerification = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) return res.status(404).json({ success: false, message: "No account found with that email." });
+    if (user.isVerified) return res.status(400).json({ success: false, message: "Email is already verified." });
+
+    user.verificationToken       = crypto.randomBytes(32).toString("hex");
+    user.verificationTokenExpire = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save({ validateBeforeSave: false });
+
+    sendVerificationEmail(user, user.verificationToken).catch(err =>
+      console.error("Resend verification email failed:", err.message)
+    );
+
+    res.json({ success: true, message: "Verification email resent. Check your inbox." });
   } catch (err) { next(err); }
 };

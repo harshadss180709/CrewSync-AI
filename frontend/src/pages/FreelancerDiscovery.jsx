@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Search, Filter, Zap, X, Loader, Users } from "lucide-react";
 import api from "../services/api.js";
@@ -26,21 +26,30 @@ export default function FreelancerDiscovery() {
   const [aiResults,  setAiResults]  = useState([]);
   const [aiLoading,  setAiLoading]  = useState(false);
 
-  const load = async () => {
+  // ── Debounced search: only fire API after 400ms of no typing ──
+  const debounceRef = useRef(null);
+
+  const load = async (searchVal, skillVal, availVal, ratingVal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search)       params.set("search",       search);
-      if (skill)        params.set("skills",        skill);
-      if (availability) params.set("availability",  availability);
-      if (minRating)    params.set("minRating",     minRating);
+      if (searchVal) params.set("search",       searchVal);
+      if (skillVal)  params.set("skills",        skillVal);
+      if (availVal)  params.set("availability",  availVal);
+      if (ratingVal) params.set("minRating",     ratingVal);
       const { data } = await api.get(`/users/freelancers?${params}`);
       setFreelancers(data.freelancers || []);
     } catch { toast.error("Failed to load freelancers"); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [search, skill, availability, minRating]);
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      load(search, skill, availability, minRating);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [search, skill, availability, minRating]);
 
   useEffect(() => {
     if (isRole("client","admin")) {

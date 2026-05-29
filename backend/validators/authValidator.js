@@ -33,7 +33,7 @@ export const validateRegister = [
 
   body("role")
     .optional()
-    .isIn(["client", "freelancer", "admin"]).withMessage("Role must be client, freelancer, or admin."),
+    .isIn(["client", "freelancer"]).withMessage("Role must be client or freelancer."),
 
   validate,
 ];

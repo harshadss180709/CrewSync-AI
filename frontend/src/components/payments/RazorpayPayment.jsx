@@ -40,24 +40,6 @@ export default function RazorpayPayment({ projectId, amount, description, userNa
         notes: description,
       });
 
-      // Demo mode — no real Razorpay popup needed
-      if (data.demo) {
-        await new Promise(r => setTimeout(r, 1200)); // simulate processing
-        const verifyRes = await api.post("/payments/razorpay/verify", {
-          razorpayOrderId:   data.orderId,
-          razorpayPaymentId: `pay_demo_${Math.random().toString(36).slice(2,10)}`,
-          razorpaySignature: "demo",
-          projectId,
-          amount,
-          demo: true,
-        });
-        setTxRef(verifyRes.data.txRef);
-        setDone(true);
-        toast.success("Razorpay payment successful! 🎉");
-        setTimeout(() => onSuccess?.({ txRef: verifyRes.data.txRef, amount }), 2000);
-        return;
-      }
-
       // Step 2: Load Razorpay script if not already loaded
       const loaded = await loadRazorpayScript();
       if (!loaded) {
@@ -92,8 +74,6 @@ export default function RazorpayPayment({ projectId, amount, description, userNa
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
               projectId,
-              amount,
-              demo: false,
             });
             setTxRef(verifyRes.data.txRef);
             setDone(true);

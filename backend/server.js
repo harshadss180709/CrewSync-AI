@@ -3,6 +3,7 @@
 // ============================================================
 import express from "express";
 import http from "http";
+import crypto from "crypto";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -61,8 +62,59 @@ app.set("io", io);
 
 // ── Global Middleware ─────────────────────────────────────
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(cors({ origin: corsOrigin, credentials: true }));
+
+// ── Razorpay Webhook — MUST be before express.json() to get raw body ──
+app.post("/api/webhooks/razorpay",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      const sig  = req.headers["x-razorpay-signature"];
+      const body = req.body.toString();
+      const expectedSig = crypto
+        .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET)
+        .update(body)
+        .digest("hex");
+
+      if (sig !== expectedSig) {
+        return res.status(400).json({ error: "Invalid webhook signature" });
+      }
+
+      const event = JSON.parse(body);
+      // payment.captured = async payment success (e.g. UPI, net banking)
+      if (event.event === "payment.captured") {
+        const p = event.payload.payment.entity;
+        const { projectId, clientId } = p.notes || {};
+        if (projectId) {
+          const { default: Payment } = await import("./models/Payment.js");
+          const { default: Project } = await import("./models/Project.js");
+          const alreadyRecorded = await Payment.exists({ transactionId: `RZP-${p.id}` });
+          if (!alreadyRecorded) {
+            const amountINR = p.amount / 100;
+            await Payment.create({
+              project:       projectId,
+              payer:         clientId,
+              amount:        amountINR,
+              currency:      "INR",
+              type:          "milestone",
+              status:        "in_escrow",
+              paymentMethod: "razorpay",
+              transactionId: `RZP-${p.id}`,
+              notes:         `Webhook capture · Order: ${p.order_id}`,
+            });
+            await Project.findByIdAndUpdate(projectId, { $inc: { escrowBalance: amountINR } });
+          }
+        }
+      }
+      res.json({ received: true });
+    } catch (err) {
+      console.error("Webhook error:", err.message);
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
+  }
+);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 

@@ -13,11 +13,15 @@ export const getFreelancers = async (req, res, next) => {
     if (availability)  query.availability = availability;
     if (minRating)     query.averageRating = { $gte: parseFloat(minRating) };
     if (maxRate)       query.hourlyRate = { $lte: parseFloat(maxRate) };
-    if (search)        query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { bio:  { $regex: search, $options: "i" } },
-      { skills: { $in: [new RegExp(search, "i")] } },
-    ];
+    if (search) {
+      // Escape special regex chars to prevent ReDoS
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 100);
+      query.$or = [
+        { name:   { $regex: escaped, $options: "i" } },
+        { bio:    { $regex: escaped, $options: "i" } },
+        { skills: { $in: [new RegExp(escaped, "i")] } },
+      ];
+    }
 
     const total     = await User.countDocuments(query);
     const freelancers = await User.find(query)

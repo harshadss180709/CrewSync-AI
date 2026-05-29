@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
-import ForgotPassword from "./pages/ForgotPassword";
+const ForgotPassword      = lazy(() => import("./pages/ForgotPassword.jsx"));
 
 // Error boundary
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
