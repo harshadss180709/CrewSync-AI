@@ -2,6 +2,7 @@ import Project from "../models/Project.js";
 import Contribution from "../models/Contribution.js";
 import Notification from "../models/Notification.js";
 import Task from "../models/Task.js";
+import { pushNotification } from "./notificationController.js";
 
 // ── @POST /api/projects ───────────────────────────────────
 export const createProject = async (req, res, next) => {
@@ -86,7 +87,7 @@ export const updateProject = async (req, res, next) => {
 
     // Notify freelancers
     for (const fId of project.freelancers) {
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: fId,
         sender:    req.user._id,
         type:      "project_update",
@@ -118,7 +119,7 @@ export const inviteFreelancer = async (req, res, next) => {
       await Contribution.create({ project: project._id, freelancer: freelancerId });
 
       // Send notification
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: freelancerId,
         sender:    req.user._id,
         type:      "project_invite",
@@ -276,5 +277,65 @@ export const deleteProject = async (req, res, next) => {
     }
     await project.deleteOne();
     res.json({ success: true, message: "Project deleted." });
+  } catch (err) { next(err); }
+};
+
+// ── @POST /api/projects/:id/interest ─────────────────────
+// Freelancer expresses interest in an open project.
+// Saves two notifications (one to the client, one to the freelancer)
+// and emits both over Socket.IO to their personal rooms.
+export const expressInterest = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id)
+      .populate("client", "name avatar email");
+
+    if (!project)
+      return res.status(404).json({ success: false, message: "Project not found." });
+
+    // Only freelancers (or admins for testing) can express interest
+    if (req.user.role === "client")
+      return res.status(403).json({ success: false, message: "Clients cannot apply to projects." });
+
+    // Prevent duplicate interest from the same freelancer
+    const alreadyInterested = await Notification.findOne({
+      type:      "project_invite",   // re-use type; the message text distinguishes it
+      sender:    req.user._id,
+      recipient: project.client._id,
+      "metadata.interestProjectId": project._id.toString(),
+    });
+    if (alreadyInterested)
+      return res.status(409).json({ success: false, message: "You've already expressed interest in this project." });
+
+    const app = req.app;
+
+    // 1️⃣  Notify the CLIENT that someone is interested
+    await pushNotification(app, {
+      recipient: project.client._id,
+      sender:    req.user._id,
+      type:      "project_invite",
+      title:     "New Interest in Your Project",
+      message:   `${req.user.name} expressed interest in "${project.title}". Visit Freelancer Discovery to review their profile.`,
+      link:      `/freelancers`,
+      priority:  "high",
+      metadata:  { interestProjectId: project._id.toString(), freelancerId: req.user._id.toString() },
+    });
+
+    // 2️⃣  Confirm to the FREELANCER that their interest was recorded
+    const confirm = await pushNotification(app, {
+      recipient: req.user._id,
+      sender:    project.client._id,
+      type:      "project_update",
+      title:     "Interest Submitted",
+      message:   `Your interest in "${project.title}" has been sent to ${project.client.name}. They'll reach out if it's a match.`,
+      link:      `/projects`,
+      priority:  "normal",
+      metadata:  { interestProjectId: project._id.toString() },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Interest submitted. The client has been notified.",
+      notification: confirm,
+    });
   } catch (err) { next(err); }
 };

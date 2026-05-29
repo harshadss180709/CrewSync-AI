@@ -3,6 +3,7 @@ import Project from "../models/Project.js";
 import Contribution from "../models/Contribution.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
+import { pushNotification } from "./notificationController.js";
 import crypto from "crypto";
 import Razorpay from "razorpay";
 
@@ -47,7 +48,7 @@ export const createPayment = async (req, res, next) => {
 
     // Notify freelancers
     for (const split of splits) {
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: split.freelancer,
         sender:    req.user._id,
         type:      "payment_pending",
@@ -127,7 +128,7 @@ export const releasePayment = async (req, res, next) => {
         { $inc: { actualPayment: split.amount }, paymentReleased: true }
       );
 
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: split.freelancer,
         sender:    req.user._id,
         type:      "payment_received",
@@ -223,7 +224,7 @@ export const fundEscrow = async (req, res, next) => {
 
     // Notify all freelancers
     for (const fId of project.freelancers) {
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: fId,
         sender:    req.user._id,
         type:      "payment_received",
@@ -355,7 +356,7 @@ export const verifyRazorpayPayment = async (req, res, next) => {
 
     // Notify freelancers
     for (const fId of project.freelancers) {
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: fId,
         sender:    req.user._id,
         type:      "payment_received",

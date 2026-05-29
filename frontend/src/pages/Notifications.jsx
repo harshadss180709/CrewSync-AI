@@ -1,102 +1,243 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Check, CheckCheck, Trash2, ExternalLink } from "lucide-react";
+import { Bell, CheckCheck, Trash2, ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import api from "../services/api.js";
-import toast from "react-hot-toast";
+import api           from "../services/api.js";
+import { useSocket } from "../context/SocketContext.jsx";
+import toast         from "react-hot-toast";
 
-const TYPE_ICONS = {
-  project_invite: "📨", task_assigned: "✅", payment_received: "💸",
-  payment_pending: "🔒", project_update: "📢", message: "💬",
-  review_received: "⭐", milestone_completed: "🏆", admin_alert: "🔔", system: "ℹ️",
+const TYPE_META = {
+  project_invite:      { icon: "📨", label: "Invite"    },
+  task_assigned:       { icon: "✅", label: "Task"      },
+  payment_received:    { icon: "💸", label: "Payment"   },
+  payment_pending:     { icon: "🔒", label: "Escrow"    },
+  project_update:      { icon: "📢", label: "Update"    },
+  message:             { icon: "💬", label: "Message"   },
+  review_received:     { icon: "⭐", label: "Review"    },
+  milestone_completed: { icon: "🏆", label: "Milestone" },
+  deadline_reminder:   { icon: "⏰", label: "Deadline"  },
+  ai_suggestion:       { icon: "✨", label: "AI"        },
+  admin_alert:         { icon: "🔔", label: "Admin"     },
+  system:              { icon: "ℹ️",  label: "System"   },
 };
 
 export default function Notifications() {
+  const { onNotification }             = useSocket();
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,  setLoading]         = useState(true);
+  const [error,    setError]           = useState(null);
 
-  const load = async () => {
+  // ── Fetch from API ─────────────────────────────────────
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const { data } = await api.get("/notifications?limit=50");
-      setNotifications(data.notifications || []);
-    } catch { toast.error("Failed to load"); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+      // Guard: the key is 'notifications' in the response
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+    } catch (err) {
+      setError(err?.message || "Failed to load notifications.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
+  useEffect(() => { load(); }, [load]);
+
+  // ── Real-time: prepend new notification instantly ───────
+  useEffect(() => {
+    if (!onNotification) return;
+    const cleanup = onNotification((notif) => {
+      setNotifications(prev => {
+        // Deduplicate by _id
+        if (prev.some(n => n._id === notif._id)) return prev;
+        return [notif, ...prev];
+      });
+      toast(notif.title, {
+        icon:     TYPE_META[notif.type]?.icon || "🔔",
+        duration: 4500,
+      });
+    });
+    return cleanup;
+  }, [onNotification]);
+
+  // ── Actions ─────────────────────────────────────────────
   const markRead = async (id) => {
-    await api.put(`/notifications/${id}/read`).catch(()=>{});
-    setNotifications(p => p.map(n => n._id === id ? { ...n, isRead: true } : n));
+    // Optimistic update
+    setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+    await api.put(`/notifications/${id}/read`).catch(() => {});
   };
+
   const markAllRead = async () => {
-    await api.put("/notifications/read-all").catch(()=>{});
-    setNotifications(p => p.map(n => ({ ...n, isRead: true })));
-    toast.success("All marked as read");
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    await api.put("/notifications/read-all").catch(() => {});
+    toast.success("All notifications marked as read");
   };
+
   const deleteN = async (id) => {
-    await api.delete(`/notifications/${id}`).catch(()=>{});
-    setNotifications(p => p.filter(n => n._id !== id));
+    setNotifications(prev => prev.filter(n => n._id !== id));
+    await api.delete(`/notifications/${id}`).catch(() => {});
   };
 
   const unread = notifications.filter(n => !n.isRead).length;
 
+  // ── Render ───────────────────────────────────────────────
   return (
     <div className="space-y-5 max-w-2xl">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Notifications</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{unread} unread</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {loading ? "Loading…"
+              : error  ? "Could not load"
+              : unread > 0 ? `${unread} unread`
+              : "All caught up"}
+          </p>
         </div>
-        {unread > 0 && (
-          <button onClick={markAllRead} className="btn-ghost text-xs flex items-center gap-1.5 text-brand-400">
-            <CheckCheck size={14}/> Mark all read
+        <div className="flex items-center gap-2">
+          {unread > 0 && !loading && (
+            <button
+              onClick={markAllRead}
+              className="btn-ghost text-xs flex items-center gap-1.5 text-brand-400 hover:text-brand-300"
+            >
+              <CheckCheck size={14} /> Mark all read
+            </button>
+          )}
+          <button
+            onClick={load}
+            disabled={loading}
+            className="btn-ghost p-2 rounded-xl text-gray-500 hover:text-gray-300 disabled:opacity-40"
+            title="Refresh"
+          >
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           </button>
-        )}
+        </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-2">{Array.from({length:5}).map((_,i)=>
-          <div key={i} className="skeleton h-16 rounded-xl"/>)}</div>
-      ) : notifications.length === 0 ? (
-        <div className="card p-14 text-center">
-          <Bell size={36} className="text-gray-600 mx-auto mb-3"/>
-          <p className="text-gray-400">No notifications yet.</p>
+      {/* Error state */}
+      {error && !loading && (
+        <div className="card p-5 border border-red-500/20 bg-red-500/5 flex items-center gap-3">
+          <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-red-300">Failed to load notifications</p>
+            <p className="text-xs text-red-400/70 mt-0.5">{error}</p>
+          </div>
+          <button onClick={load} className="btn-ghost text-xs text-red-400 hover:text-red-300 flex-shrink-0">
+            Retry
+          </button>
         </div>
-      ) : (
-        <AnimatePresence>
-          {notifications.map((n, i) => (
-            <motion.div key={n._id} initial={{ opacity:0, x:-10 }} animate={{ opacity:1, x:0 }}
-              exit={{ opacity:0, height:0 }} transition={{ delay: i*0.03 }}
-              className={`flex items-start gap-3 p-4 rounded-2xl border transition-all
-                ${n.isRead ? "card opacity-70" : "card border-brand-500/20 bg-brand-600/5"}`}
-              onClick={() => { if (!n.isRead) markRead(n._id); }}
-            >
-              <div className="w-9 h-9 bg-dark-700/60 rounded-xl flex items-center justify-center flex-shrink-0 text-base">
-                {TYPE_ICONS[n.type]||"🔔"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className={`text-sm font-medium ${n.isRead ? "text-gray-300" : "text-white"}`}>{n.title}</p>
-                  {!n.isRead && <div className="w-2 h-2 bg-brand-500 rounded-full flex-shrink-0 mt-1"/>}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
-                <p className="text-[10px] text-gray-600 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {n.link && (
-                  <Link to={n.link} className="btn-ghost p-1.5 rounded-lg text-gray-600 hover:text-brand-400">
-                    <ExternalLink size={13}/>
-                  </Link>
-                )}
-                <button onClick={(e)=>{ e.stopPropagation(); deleteN(n._id); }}
-                  className="btn-ghost p-1.5 rounded-lg text-gray-600 hover:text-red-400">
-                  <Trash2 size={13}/>
-                </button>
-              </div>
-            </motion.div>
+      )}
+
+      {/* Loading skeletons */}
+      {loading && (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-[72px] rounded-2xl bg-dark-700/40 animate-pulse" />
           ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && notifications.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-14 text-center"
+        >
+          <Bell size={36} className="text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400 font-medium">No notifications yet</p>
+          <p className="text-xs text-gray-600 mt-1 max-w-xs mx-auto">
+            Express interest in a project, get invited to a team, or receive a payment to see notifications here.
+          </p>
+        </motion.div>
+      )}
+
+      {/* Notification list */}
+      {!loading && !error && notifications.length > 0 && (
+        <AnimatePresence initial={false}>
+          {notifications.map((n, i) => {
+            const meta = TYPE_META[n.type] ?? { icon: "🔔", label: "" };
+            return (
+              <motion.div
+                key={n._id}
+                layout
+                initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0,    scale: 1    }}
+                exit={{    opacity: 0, height: 0 }}
+                transition={{ duration: 0.18, delay: i < 12 ? i * 0.025 : 0 }}
+                onClick={() => { if (!n.isRead) markRead(n._id); }}
+                className={`
+                  group flex items-start gap-3 p-4 rounded-2xl border
+                  cursor-pointer select-none transition-all duration-150
+                  ${n.isRead
+                    ? "card opacity-75 hover:opacity-100"
+                    : "bg-brand-600/5 border-brand-500/25 hover:bg-brand-600/8"}
+                `}
+              >
+                {/* Type icon */}
+                <div className="w-9 h-9 rounded-xl bg-dark-700/60 flex items-center justify-center flex-shrink-0 text-base">
+                  {meta.icon}
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className={`text-sm font-medium leading-snug ${n.isRead ? "text-gray-300" : "text-white"}`}>
+                      {n.title}
+                    </p>
+                    {!n.isRead && (
+                      <span className="w-2 h-2 bg-brand-500 rounded-full flex-shrink-0 mt-1.5" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                    {n.message}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {meta.label && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wider bg-dark-600 border border-white/8 text-gray-500 px-1.5 py-0.5 rounded-md">
+                        {meta.label}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-gray-600">
+                      {new Date(n.createdAt).toLocaleString([], {
+                        month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions — visible on hover via `group` on the parent */}
+                <div
+                  className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {n.link && (
+                    <Link
+                      to={n.link}
+                      className="btn-ghost p-1.5 rounded-lg text-gray-600 hover:text-brand-400 transition-colors"
+                      title="Open"
+                    >
+                      <ExternalLink size={13} />
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => deleteN(n._id)}
+                    className="btn-ghost p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+                    title="Dismiss"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+
+              </motion.div>
+            );
+          })}
         </AnimatePresence>
       )}
+
     </div>
   );
 }

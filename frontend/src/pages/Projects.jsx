@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Filter, X, FolderKanban, Zap, Loader, Compass, Loader2, DollarSign, Clock, Star, MapPin, CheckCircle2, Globe } from "lucide-react";
+import { Plus, Search, Filter, X, FolderKanban, Zap, Loader, Compass, Loader2, DollarSign, Clock, MapPin, CheckCircle2, Globe, Send } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import api from "../services/api.js";
 import ProjectCard from "../components/project/ProjectCard.jsx";
@@ -20,50 +20,85 @@ const emptyForm = {
 
 const URGENCY_COLOR = { high: "text-red-400", medium: "text-yellow-400", low: "text-green-400" };
 
-function DiscoverCard({ job, onApply }) {
+function DiscoverCard({ job, onApply, isApplying, hasApplied }) {
   return (
-    <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-      className="card p-5 hover:border-brand-500/30 transition-all group">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="card p-5 hover:border-brand-500/30 transition-all group"
+    >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="text-sm font-semibold text-white group-hover:text-brand-300 transition-colors">{job.title}</h3>
-            {job.verified && <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" title="Verified client" />}
+            <h3 className="text-sm font-semibold text-white group-hover:text-brand-300 transition-colors">
+              {job.title}
+            </h3>
+            {job.verified && (
+              <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" title="Verified client" />
+            )}
           </div>
           <p className="text-xs text-gray-500 line-clamp-2">{job.description}</p>
         </div>
-        <div className={`text-xs font-bold px-2 py-1 rounded-lg bg-brand-600/20 text-brand-400 border border-brand-500/30 flex-shrink-0`}>
+        <div className="text-xs font-bold px-2 py-1 rounded-lg bg-brand-600/20 text-brand-400 border border-brand-500/30 flex-shrink-0">
           {job.matchScore}% match
         </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {job.requiredSkills?.slice(0,4).map(s => (
-          <span key={s} className="text-[10px] bg-dark-700 border border-white/8 text-gray-400 px-2 py-0.5 rounded-md">{s}</span>
+        {job.requiredSkills?.slice(0, 4).map(s => (
+          <span key={s} className="text-[10px] bg-dark-700 border border-white/8 text-gray-400 px-2 py-0.5 rounded-md">
+            {s}
+          </span>
         ))}
       </div>
 
       <div className="flex items-center justify-between text-xs text-gray-500 mb-3 flex-wrap gap-2">
-        <span className="flex items-center gap-1"><DollarSign size={11}/> {job.budget}</span>
-        <span className="flex items-center gap-1"><Clock size={11}/> {job.deadline}</span>
-        {job.location && <span className="flex items-center gap-1"><MapPin size={11}/> {job.location}</span>}
+        <span className="flex items-center gap-1">
+          <DollarSign size={11} />
+          {job.budgetMin && job.budgetMax
+            ? `$${job.budgetMin.toLocaleString()} – $${job.budgetMax.toLocaleString()}`
+            : job.budget}
+        </span>
+        <span className="flex items-center gap-1"><Clock size={11} /> {job.deadline}</span>
+        {job.location && <span className="flex items-center gap-1"><MapPin size={11} /> {job.location}</span>}
         {job.proposals != null && <span>{job.proposals} proposals</span>}
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
           {job._fromDB
-            ? <span className="text-[10px] bg-dark-600 border border-white/10 text-gray-400 px-1.5 py-0.5 rounded">CrewSync DB</span>
-            : <><Globe size={11} className="text-gray-600" /><span className="text-[10px] text-gray-600">{job.source}</span></>
+            ? <span className="text-[10px] bg-dark-600 border border-white/10 text-gray-400 px-1.5 py-0.5 rounded flex-shrink-0">
+                CrewSync
+              </span>
+            : <><Globe size={11} className="text-gray-600 flex-shrink-0" />
+               <span className="text-[10px] text-gray-600 truncate">{job.source}</span></>
           }
-          <span className="text-[10px] text-gray-600">{job.postedTime}</span>
-          {job.urgency && (
-            <span className={`text-[10px] font-semibold ${URGENCY_COLOR[job.urgency]}`}>● {job.urgency}</span>
+          <span className="text-[10px] text-gray-600 truncate">{job.postedTime}</span>
+          {job.urgency && job.urgency !== "normal" && (
+            <span className={`text-[10px] font-semibold flex-shrink-0 ${URGENCY_COLOR[job.urgency]}`}>
+              ● {job.urgency.replace("_", " ")}
+            </span>
           )}
         </div>
-        <button onClick={() => onApply(job)}
-          className="text-xs bg-brand-600/20 hover:bg-brand-600/40 text-brand-400 border border-brand-500/30 px-3 py-1.5 rounded-lg transition-all">
-          Express Interest →
+
+        <button
+          onClick={() => onApply(job)}
+          disabled={isApplying || hasApplied}
+          className={`
+            flex-shrink-0 flex items-center gap-1.5
+            text-xs px-3 py-1.5 rounded-lg border
+            transition-all duration-150 disabled:cursor-not-allowed
+            ${hasApplied
+              ? "bg-green-500/10 border-green-500/30 text-green-400"
+              : "bg-brand-600/20 hover:bg-brand-600/40 border-brand-500/30 text-brand-400"}
+          `}
+        >
+          {isApplying ? (
+            <><Loader2 size={11} className="animate-spin" /> Sending…</>
+          ) : hasApplied ? (
+            <><CheckCircle2 size={11} /> Sent</>
+          ) : (
+            <><Send size={11} /> Express Interest</>
+          )}
         </button>
       </div>
     </motion.div>
@@ -108,8 +143,41 @@ export default function Projects() {
     finally { setDiscovering(false); }
   };
 
-  const handleApply = (job) => {
-    toast.success(`Interest expressed for "${job.title}"! Check your notifications.`);
+  // Track which jobs the user already applied to (prevents double-clicks)
+  const [applied, setApplied] = useState(new Set());
+  const [applying, setApplying] = useState(null); // jobId currently submitting
+
+  const handleApply = async (job) => {
+    if (applied.has(job.id)) {
+      toast("You already expressed interest in this project.", { icon: "ℹ️" });
+      return;
+    }
+
+    setApplying(job.id);
+    try {
+      // DB-backed projects have a real MongoDB ObjectId as their id
+      if (job._fromDB) {
+        await api.post(`/projects/${job.id}/interest`);
+        setApplied(prev => new Set([...prev, job.id]));
+        toast.success(`Interest sent for "${job.title}" — check your notifications.`);
+      } else {
+        // AI-generated listing — no real project in DB; just confirm to the user
+        setApplied(prev => new Set([...prev, job.id]));
+        toast.success(`Interest noted for "${job.title}".\nThis is an external listing from ${job.source} — apply directly via their platform.`, {
+          duration: 5000,
+        });
+      }
+    } catch (err) {
+      if (err?.status === 409 || err?.success === false) {
+        // Already expressed interest (409 from backend)
+        setApplied(prev => new Set([...prev, job.id]));
+        toast("You've already expressed interest in this project.", { icon: "ℹ️" });
+      } else {
+        toast.error(err?.message || "Failed to submit interest. Please try again.");
+      }
+    } finally {
+      setApplying(null);
+    }
   };
 
   const load = async () => {
@@ -230,7 +298,13 @@ export default function Projects() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {discovered.map((job, i) => (
-                <DiscoverCard key={i} job={job} onApply={handleApply} />
+                <DiscoverCard
+                  key={job.id || i}
+                  job={job}
+                  onApply={handleApply}
+                  isApplying={applying === job.id}
+                  hasApplied={applied.has(job.id)}
+                />
               ))}
             </div>
           )}

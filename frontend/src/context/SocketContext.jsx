@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext.jsx";
 
@@ -6,9 +6,11 @@ const SocketContext = createContext(null);
 
 export function SocketProvider({ children }) {
   const { token, user } = useAuth();
-  const socketRef = useRef(null);
-  const [isConnected,  setIsConnected]  = useState(false);
-  const [onlineUsers,  setOnlineUsers]  = useState([]);
+  const socketRef   = useRef(null);
+  const handlersRef = useRef(new Set()); // registered notification handlers
+
+  const [isConnected, setIsConnected] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   useEffect(() => {
     if (!token || !user) {
@@ -18,40 +20,49 @@ export function SocketProvider({ children }) {
     }
 
     const socket = io(import.meta.env.VITE_SOCKET_URL || "https://crewsync-ai.onrender.com", {
-      auth: { token },
+      auth:       { token },
       transports: ["websocket", "polling"],
-      reconnection: true,
+      reconnection:         true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionDelay:    1000,
     });
 
     socket.on("connect",    () => { setIsConnected(true);  console.log("🔌 Socket connected"); });
     socket.on("disconnect", () => { setIsConnected(false); console.log("🔌 Socket disconnected"); });
+
     socket.on("user:offline", ({ userId }) => {
       setOnlineUsers(prev => prev.filter(u => u.id !== userId));
     });
 
+    // ── Broadcast notification:new to all registered handlers ──
+    socket.on("notification:new", (notification) => {
+      handlersRef.current.forEach(handler => handler(notification));
+    });
+
     socketRef.current = socket;
-    return () => { socket.disconnect(); };
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [token, user]);
 
-  // ── Helper methods ────────────────────────────────────
-  const joinProject = (projectId) => {
-    socketRef.current?.emit("project:join", projectId);
-  };
-  const leaveProject = (projectId) => {
-    socketRef.current?.emit("project:leave", projectId);
-  };
-  const sendTypingStart = (projectId) => {
-    socketRef.current?.emit("typing:start", { projectId });
-  };
-  const sendTypingStop = (projectId) => {
-    socketRef.current?.emit("typing:stop", { projectId });
-  };
-  const emitTaskMove = (projectId, taskId, newStatus, position) => {
-    socketRef.current?.emit("task:move", { projectId, taskId, newStatus, position });
-  };
-  const on  = (event, cb) => socketRef.current?.on(event, cb);
+  // ── Register / unregister a notification handler ──────────
+  // Components call this to receive real-time notifications.
+  // Returns a cleanup function to deregister.
+  const onNotification = useCallback((handler) => {
+    handlersRef.current.add(handler);
+    return () => handlersRef.current.delete(handler);
+  }, []);
+
+  // ── Project room helpers ──────────────────────────────────
+  const joinProject      = (pid) => socketRef.current?.emit("project:join",   pid);
+  const leaveProject     = (pid) => socketRef.current?.emit("project:leave",  pid);
+  const sendTypingStart  = (pid) => socketRef.current?.emit("typing:start",  { projectId: pid });
+  const sendTypingStop   = (pid) => socketRef.current?.emit("typing:stop",   { projectId: pid });
+  const emitTaskMove     = (pid, tid, status, pos) =>
+    socketRef.current?.emit("task:move", { projectId: pid, taskId: tid, newStatus: status, position: pos });
+
+  const on  = (event, cb) => socketRef.current?.on(event,  cb);
   const off = (event, cb) => socketRef.current?.off(event, cb);
 
   return (
@@ -59,6 +70,7 @@ export function SocketProvider({ children }) {
       socket: socketRef.current,
       isConnected,
       onlineUsers,
+      onNotification,
       joinProject,
       leaveProject,
       sendTypingStart,

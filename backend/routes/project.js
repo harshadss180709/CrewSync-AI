@@ -1,5 +1,5 @@
 import express from "express";
-import { createProject, getProjects, getProjectById, updateProject, inviteFreelancer, removeFreelancer, uploadProjectFile, getContributions, deleteProject, getProjectProgress } from "../controllers/projectController.js";
+import { createProject, getProjects, getProjectById, updateProject, inviteFreelancer, removeFreelancer, uploadProjectFile, getContributions, deleteProject, getProjectProgress, expressInterest } from "../controllers/projectController.js";
 import { addMilestone, getMilestones, updateMilestone, deleteMilestone } from "../controllers/milestoneController.js";
 import { protect, authorize } from "../middleware/auth.js";
 import { uploadProjectFile as uploadMiddleware } from "../config/cloudinary.js";
@@ -11,6 +11,7 @@ router.get("/:id",                      protect, getProjectById);
 router.put("/:id",                      protect, updateProject);
 router.delete("/:id",                   protect, deleteProject);
 router.post("/:id/invite",              protect, authorize("client","admin"), validateInvite, inviteFreelancer);
+router.post("/:id/interest",            protect, expressInterest);
 router.delete("/:id/freelancer/:fid",   protect, authorize("client","admin"), removeFreelancer);
 router.post("/:id/files",               protect, uploadMiddleware.single("file"), uploadProjectFile);
 router.get("/:id/contributions",        protect, getContributions);

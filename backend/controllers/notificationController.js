@@ -1,5 +1,21 @@
 import Notification from "../models/Notification.js";
 
+// ── Shared helper — save to DB then push over socket ─────
+// Call this from ANY controller that needs to notify a user.
+// `app` is the Express app instance (holds the io reference).
+export async function pushNotification(app, payload) {
+  const doc = await Notification.create(payload);
+  const populated = await doc.populate("sender", "name avatar");
+
+  // Emit to the recipient's personal socket room (if connected)
+  const io = app?.get("io");
+  if (io) {
+    io.to(`user:${payload.recipient}`).emit("notification:new", populated);
+  }
+
+  return populated;
+}
+
 export const getNotifications = async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -10,7 +26,8 @@ export const getNotifications = async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(Number(limit));
     const unread = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
-    res.json({ success: true, total, unread, notifications });
+    // Send both names — frontend components use different keys historically
+    res.json({ success: true, total, unread, unreadCount: unread, notifications });
   } catch (err) { next(err); }
 };
 
