@@ -36,9 +36,10 @@ const server = http.createServer(app);
 
 // ── CORS origins ─────────────────────────────────────────
 const allowedOrigins = [
-  process.env.CLIENT_URL,          // production Vercel URL
+  process.env.CLIENT_URL,
   "http://localhost:5173",
   "http://localhost:5174",
+  "https://crewsync-ai.netlify.app"
 ].filter(Boolean);
 
 function corsOrigin(origin, callback) {
