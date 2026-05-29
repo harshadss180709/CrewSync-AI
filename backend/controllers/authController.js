@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import { generateToken } from "../middleware/auth.js";
 import crypto from "crypto";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 // ── @POST /api/auth/register ──────────────────────────────
 export const register = async (req, res, next) => {
@@ -20,9 +21,14 @@ export const register = async (req, res, next) => {
 
     const token = generateToken(user._id);
 
+    // Send verification email (non-blocking — don't fail registration if email fails)
+    sendVerificationEmail(user, user.verificationToken).catch(err =>
+      console.error("Verification email failed:", err.message)
+    );
+
     res.status(201).json({
       success: true,
-      message: "Account created successfully.",
+      message: "Account created. Check your email to verify your account.",
       token,
       user: {
         _id:    user._id,
@@ -104,12 +110,10 @@ export const forgotPassword = async (req, res, next) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hr
     await user.save({ validateBeforeSave: false });
 
-    // In production: send email with reset link
-    res.json({
-      success: true,
-      message: "Password reset email sent (simulated).",
-      resetToken: user.resetPasswordToken, // dev only
-    });
+    sendPasswordResetEmail(user, user.resetPasswordToken).catch(err =>
+      console.error("Reset email failed:", err.message)
+    );
+    res.json({ success: true, message: "Password reset email sent. Check your inbox." });
   } catch (err) { next(err); }
 };
 

@@ -39,7 +39,7 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:5173",
   "http://localhost:5174",
-  "https://crewsync-ai.netlify.app"
+  "https://crewsync-ai.netlify.app",
 ].filter(Boolean);
 
 function corsOrigin(origin, callback) {

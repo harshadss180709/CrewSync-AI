@@ -30,6 +30,8 @@ const Settings            = lazy(() => import("./pages/Settings.jsx"));
 const Notifications       = lazy(() => import("./pages/Notifications.jsx"));
 const AdminPanel          = lazy(() => import("./pages/AdminPanel.jsx"));
 const NotFound            = lazy(() => import("./pages/NotFound.jsx"));
+const VerifyEmail         = lazy(() => import("./pages/VerifyEmail.jsx"));
+const ResetPassword       = lazy(() => import("./pages/ResetPassword.jsx"));
 
 export default function App() {
   return (
@@ -40,7 +42,9 @@ export default function App() {
             {/* Public */}
             <Route path="/"         element={<Landing />} />
             <Route path="/login"    element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route path="/register"              element={<Register />} />
+            <Route path="/verify-email/:token"   element={<VerifyEmail />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
 
             {/* Protected — Dashboard shell */}
             <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
