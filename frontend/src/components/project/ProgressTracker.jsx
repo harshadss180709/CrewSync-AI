@@ -60,11 +60,13 @@ function HealthBadge({ status }) {
 // ── Activity Heatmap (last 7 days) ────────────────────────
 function ActivityHeatmap({ data = [] }) {
   const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const max = Math.max(...data.map(d => d.count), 1);
+  // Guard: if backend sent a number instead of array, use an empty array
+  const safeData = Array.isArray(data) ? data : [];
+  const max = Math.max(...safeData.map(d => d.count), 1);
   return (
     <div className="flex items-end gap-1.5">
       {days.map((day, i) => {
-        const item = data[i] || { count: 0 };
+        const item = safeData[i] || { count: 0 };
         const pct = item.count / max;
         const height = Math.max(8, Math.round(pct * 40));
         const opacity = pct < 0.1 ? "opacity-20" : pct < 0.4 ? "opacity-50" : pct < 0.7 ? "opacity-75" : "opacity-100";
@@ -222,9 +224,9 @@ export default function ProgressTracker({ project }) {
             </div>
             <span className="text-xs text-gray-500">Last 7 days</span>
           </div>
-          <ActivityHeatmap data={progress.recentActivity || []} />
+          <ActivityHeatmap data={Array.isArray(progress.recentActivity) ? progress.recentActivity : []} />
           <p className="text-[10px] text-gray-600 mt-2">
-            {(progress.recentActivity || []).reduce((s,d) => s + (d.count||0), 0)} total actions this week
+            {(Array.isArray(progress.recentActivity) ? progress.recentActivity : []).reduce((s,d) => s + (d.count||0), 0)} total actions this week
           </p>
         </div>
       </div>

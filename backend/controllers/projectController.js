@@ -2,6 +2,7 @@ import Project from "../models/Project.js";
 import Contribution from "../models/Contribution.js";
 import Notification from "../models/Notification.js";
 import Task from "../models/Task.js";
+import { pushNotification } from "./notificationController.js";
 
 // ── @POST /api/projects ───────────────────────────────────
 export const createProject = async (req, res, next) => {
@@ -86,7 +87,7 @@ export const updateProject = async (req, res, next) => {
 
     // Notify freelancers
     for (const fId of project.freelancers) {
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: fId,
         sender:    req.user._id,
         type:      "project_update",
@@ -118,7 +119,7 @@ export const inviteFreelancer = async (req, res, next) => {
       await Contribution.create({ project: project._id, freelancer: freelancerId });
 
       // Send notification
-      await Notification.create({
+      await pushNotification(req.app, {
         recipient: freelancerId,
         sender:    req.user._id,
         type:      "project_invite",
@@ -228,9 +229,20 @@ export const getProjectProgress = async (req, res, next) => {
       else if (timeProgress > taskProgress + 10)      timelineStatus = "slightly_behind";
     }
 
-    // 7-day team activity (simplified: tasks touched in last 7 days)
-    const sevenDaysAgo  = new Date(now - 7 * 24 * 60 * 60 * 1000);
-    const recentActivity= tasks.filter(t => new Date(t.updatedAt) > sevenDaysAgo).length;
+    // 7-day team activity — per-day counts for the ActivityHeatmap
+    // Returns [{date:"Mon",count:N}, ...] for the last 7 days (oldest→newest)
+    const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const recentActivity = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (6 - i));      // go back 6..0 days
+      const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(d); dayEnd.setHours(23, 59, 59, 999);
+      const count    = tasks.filter(t => {
+        const u = new Date(t.updatedAt);
+        return u >= dayStart && u <= dayEnd;
+      }).length;
+      return { date: DAY_NAMES[d.getDay()], count };
+    });
 
     const budgetUsedPct = project.totalPaid && project.budget
       ? Math.min(100, Math.round((project.totalPaid / project.budget) * 100))
@@ -276,5 +288,64 @@ export const deleteProject = async (req, res, next) => {
     }
     await project.deleteOne();
     res.json({ success: true, message: "Project deleted." });
+  } catch (err) { next(err); }
+};
+
+// ── @POST /api/projects/:id/interest ─────────────────────────
+// Freelancer expresses interest in an open project.
+// Creates two notifications (client + freelancer confirmation)
+// and emits both over Socket.IO instantly.
+export const expressInterest = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id)
+      .populate("client", "name avatar email");
+
+    if (!project)
+      return res.status(404).json({ success: false, message: "Project not found." });
+
+    if (req.user.role === "client")
+      return res.status(403).json({ success: false, message: "Clients cannot apply to projects." });
+
+    // Idempotency — prevent duplicate submissions from the same freelancer
+    const already = await Notification.findOne({
+      sender:    req.user._id,
+      recipient: project.client._id,
+      "metadata.interestProjectId": project._id.toString(),
+    });
+    if (already)
+      return res.status(409).json({ success: false, message: "You have already expressed interest in this project." });
+
+    // 1. Notify the CLIENT
+    await pushNotification(req.app, {
+      recipient: project.client._id,
+      sender:    req.user._id,
+      type:      "project_invite",
+      title:     "New Interest in Your Project",
+      message:   `${req.user.name} expressed interest in "${project.title}". Visit Freelancer Discovery to review their profile.`,
+      link:      `/freelancers`,
+      priority:  "high",
+      metadata:  {
+        interestProjectId: project._id.toString(),
+        freelancerId:      req.user._id.toString(),
+      },
+    });
+
+    // 2. Confirm to the FREELANCER
+    const confirm = await pushNotification(req.app, {
+      recipient: req.user._id,
+      sender:    project.client._id,
+      type:      "project_update",
+      title:     "Interest Submitted ✓",
+      message:   `Your interest in "${project.title}" has been sent to ${project.client.name}. They'll reach out if it's a match.`,
+      link:      `/projects`,
+      priority:  "normal",
+      metadata:  { interestProjectId: project._id.toString() },
+    });
+
+    res.status(201).json({
+      success:  true,
+      message:  "Interest submitted. The client has been notified.",
+      notification: confirm,
+    });
   } catch (err) { next(err); }
 };

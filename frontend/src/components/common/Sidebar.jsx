@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAuth }   from "../../context/AuthContext.jsx";
+import { useSocket } from "../../context/SocketContext.jsx";
 import api from "../../services/api.js";
 import {
   LayoutDashboard, FolderKanban, Users, BarChart3,
@@ -21,20 +22,31 @@ const navItems = [
 
 export default function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, logout, isRole } = useAuth();
+  const { onNotification }       = useSocket();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // ── Initial fetch + 60s fallback poll ──────────────────────
   useEffect(() => {
     const fetchUnread = async () => {
       try {
-        const { data } = await api.get("/notifications?unread=true&limit=1");
-        setUnreadCount(data.unreadCount || 0);
+        const { data } = await api.get("/notifications?limit=1");
+        // Backend sends 'unread'; also aliased as 'unreadCount' for compatibility
+        setUnreadCount(data.unread ?? data.unreadCount ?? 0);
       } catch { /* silent */ }
     };
     fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
+    const interval = setInterval(fetchUnread, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  // ── Real-time: bump badge instantly ────────────────────────
+  useEffect(() => {
+    if (!onNotification) return;
+    return onNotification(() => {
+      setUnreadCount((prev) => prev + 1);
+    });
+  }, [onNotification]);
 
   const handleLogout = () => { logout(); navigate("/login"); };
 
@@ -77,6 +89,7 @@ export default function Sidebar({ collapsed, onToggle, onClose }) {
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to}
+            onClick={() => { if (label === "Notifications") setUnreadCount(0); }}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
                ${isActive
